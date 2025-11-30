@@ -1,4 +1,4 @@
-# mem-vfs
+# @lova/mem-vfs
 
 High-performance in-memory virtual file system for Node.js with symlink support, file watching, and snapshot/rollback capabilities.
 
@@ -15,15 +15,15 @@ High-performance in-memory virtual file system for Node.js with symlink support,
 ## Installation
 
 ```bash
-npm install mem-vfs
+npm install @lova/mem-vfs
 # or
-pnpm add mem-vfs
+pnpm add @lova/mem-vfs
 ```
 
 ## Quick Start
 
 ```typescript
-import { createVFS } from 'mem-vfs';
+import { createVFS } from '@lova/mem-vfs';
 
 const vfs = createVFS();
 
@@ -186,7 +186,7 @@ import {
   NotADirectoryError,
   SymlinkLoopError,
   InvalidPathError
-} from 'mem-vfs';
+} from '@lova/mem-vfs';
 
 try {
   await vfs.readFile('/nonexistent');
@@ -209,7 +209,7 @@ import {
   resolve,
   relative,
   isAbsolute
-} from 'mem-vfs';
+} from '@lova/mem-vfs';
 
 normalizePath('/a/b/../c/./d') // '/a/c/d'
 dirname('/path/to/file.txt')   // '/path/to'

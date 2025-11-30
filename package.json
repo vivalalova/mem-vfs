@@ -1,6 +1,9 @@
 {
-  "name": "mem-vfs",
+  "name": "@lova/mem-vfs",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "High-performance in-memory virtual file system with symlink support, file watching, and snapshot/rollback capabilities",
   "type": "module",
   "main": "./dist/index.js",
