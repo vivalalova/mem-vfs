@@ -555,6 +555,38 @@ export class VirtualFileSystem {
 
   /** 從 JSON 結構載入 */
   async fromJSON(structure: DirectoryJSON, basePath = '/'): Promise<void> {
+    // 偵測格式：如果任何 key 以 / 開頭或包含 / 且 value 是字串，視為平面路徑格式
+    const isFlatFormat = Object.entries(structure).some(
+      ([key, value]) =>
+        (key.startsWith('/') || key.includes('/')) &&
+        (typeof value === 'string' || Buffer.isBuffer(value) || value === null)
+    );
+
+    if (isFlatFormat) {
+      // 平面路徑格式：{ '/path/to/file.ts': 'content' }
+      await this.fromFlatJSON(structure);
+    } else {
+      // 嵌套結構格式：{ 'dir': { 'file.ts': 'content' } }
+      await this.fromNestedJSON(structure, basePath);
+    }
+  }
+
+  /** 從平面路徑 JSON 結構載入 */
+  private async fromFlatJSON(structure: DirectoryJSON): Promise<void> {
+    for (const [path, value] of Object.entries(structure)) {
+      if (value === null || value === undefined) {
+        // null/undefined 表示目錄
+        await this.createDirectory(path, true);
+      } else if (typeof value === 'string' || Buffer.isBuffer(value)) {
+        // 字串或 Buffer 表示檔案
+        await this.writeFile(path, value);
+      }
+      // 忽略物件（平面格式不應有嵌套物件）
+    }
+  }
+
+  /** 從嵌套結構 JSON 載入 */
+  private async fromNestedJSON(structure: DirectoryJSON, basePath: string): Promise<void> {
     for (const [key, value] of Object.entries(structure)) {
       const fullPath = join(basePath, key);
 
@@ -567,13 +599,48 @@ export class VirtualFileSystem {
       } else if (typeof value === 'object') {
         // 巢狀物件表示子目錄
         await this.createDirectory(fullPath, true);
-        await this.fromJSON(value as DirectoryJSON, fullPath);
+        await this.fromNestedJSON(value as DirectoryJSON, fullPath);
       }
     }
   }
 
   /** 輸出為 JSON 結構 */
-  toJSON(basePath = '/'): DirectoryJSON {
+  toJSON(basePath = '/', options?: { flatten?: boolean }): DirectoryJSON {
+    if (options?.flatten) {
+      return this.toFlatJSON(basePath);
+    }
+    return this.toNestedJSON(basePath);
+  }
+
+  /** 輸出為平面路徑 JSON 結構 */
+  private toFlatJSON(basePath: string): DirectoryJSON {
+    const result: DirectoryJSON = {};
+
+    const traverse = (dir: VFSDirectory, currentPath: string): void => {
+      for (const node of dir.getChildren()) {
+        const nodePath = currentPath === '/' ? `/${node.name}` : `${currentPath}/${node.name}`;
+
+        if (node.isFile) {
+          const content = (node as VFSFile).read();
+          result[nodePath] = Buffer.isBuffer(content) ? content.toString('utf-8') : content;
+        } else if (node.isDirectory) {
+          traverse(node as VFSDirectory, nodePath);
+        } else if (node.isSymlink) {
+          result[nodePath] = `symlink:${(node as VFSSymlink).target}`;
+        }
+      }
+    };
+
+    const startDir = this.getDirectoryOrNull(basePath);
+    if (startDir) {
+      traverse(startDir, basePath === '/' ? '' : basePath);
+    }
+
+    return result;
+  }
+
+  /** 輸出為嵌套結構 JSON */
+  private toNestedJSON(basePath: string): DirectoryJSON {
     const result: DirectoryJSON = {};
     const dir = this.getDirectoryOrNull(basePath);
 
@@ -587,7 +654,7 @@ export class VirtualFileSystem {
         result[node.name] = Buffer.isBuffer(content) ? content.toString('utf-8') : content;
       } else if (node.isDirectory) {
         const subPath = basePath === '/' ? `/${node.name}` : `${basePath}/${node.name}`;
-        const subContent = this.toJSON(subPath);
+        const subContent = this.toNestedJSON(subPath);
         result[node.name] = Object.keys(subContent).length > 0 ? subContent : null;
       } else if (node.isSymlink) {
         result[node.name] = `symlink:${(node as VFSSymlink).target}`;
