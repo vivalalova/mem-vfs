@@ -412,6 +412,61 @@ describe('VirtualFileSystem', () => {
   });
 
   // ============================================================
+  // 原子寫入
+  // ============================================================
+
+  describe('原子寫入', () => {
+    it('應該使用臨時檔案進行原子寫入', async () => {
+      await vfs.writeFile('/test.txt', 'content', { tempSuffix: '.tmp' });
+
+      // 最終檔案應該存在且內容正確
+      expect(await vfs.readFile('/test.txt', 'utf-8')).toBe('content');
+      // 臨時檔案應該不存在（已被移動）
+      expect(await vfs.exists('/test.txt.tmp')).toBe(false);
+    });
+
+    it('原子寫入應該覆寫現有檔案', async () => {
+      await vfs.writeFile('/test.txt', 'original');
+      await vfs.writeFile('/test.txt', 'updated', { tempSuffix: '.tmp' });
+
+      expect(await vfs.readFile('/test.txt', 'utf-8')).toBe('updated');
+    });
+
+    it('應該使用指定編碼寫入', async () => {
+      const utf16Content = 'Hello 世界';
+      await vfs.writeFile('/test.txt', utf16Content, { encoding: 'utf-8' });
+
+      const content = await vfs.readFile('/test.txt', 'utf-8');
+      expect(content).toBe(utf16Content);
+    });
+
+    it('應該結合臨時檔案和編碼選項', async () => {
+      await vfs.writeFile('/test.txt', '測試內容', {
+        tempSuffix: '.writing',
+        encoding: 'utf-8',
+      });
+
+      expect(await vfs.readFile('/test.txt', 'utf-8')).toBe('測試內容');
+      expect(await vfs.exists('/test.txt.writing')).toBe(false);
+    });
+
+    it('原子寫入失敗時不應該破壞原檔案', async () => {
+      await vfs.writeFile('/test.txt', 'original');
+
+      // 製造一個寫入目錄的錯誤情況
+      await vfs.createDirectory('/blocked');
+
+      // 嘗試寫入目錄應該失敗
+      await expect(
+        vfs.writeFile('/blocked', 'content', { tempSuffix: '.tmp' })
+      ).rejects.toThrow();
+
+      // 原始檔案應該不受影響
+      expect(await vfs.readFile('/test.txt', 'utf-8')).toBe('original');
+    });
+  });
+
+  // ============================================================
   // 邊界案例
   // ============================================================
 

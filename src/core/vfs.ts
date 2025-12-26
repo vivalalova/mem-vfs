@@ -93,7 +93,25 @@ export class VirtualFileSystem {
   }
 
   /** 寫入檔案 */
-  async writeFile(filePath: string, content: string | Buffer, _options?: AtomicWriteOptions): Promise<void> {
+  async writeFile(filePath: string, content: string | Buffer, options?: AtomicWriteOptions): Promise<void> {
+    // 處理編碼選項
+    const finalContent = options?.encoding && typeof content === 'string'
+      ? Buffer.from(content, options.encoding)
+      : content;
+
+    // 原子寫入模式：先寫入臨時檔案，再重命名
+    if (options?.tempSuffix) {
+      const tempPath = `${filePath}${options.tempSuffix}`;
+      await this.writeFileInternal(tempPath, finalContent);
+      await this.moveFile(tempPath, filePath);
+      return;
+    }
+
+    await this.writeFileInternal(filePath, finalContent);
+  }
+
+  /** 內部寫入檔案實作 */
+  private async writeFileInternal(filePath: string, content: string | Buffer): Promise<void> {
     const { parentPath, name } = resolvePath(filePath);
 
     // 確保父目錄存在
